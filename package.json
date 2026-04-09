@@ -1,0 +1,23 @@
+{
+  "name": "clinic-voice-agent-backend",
+  "version": "1.0.0",
+  "description": "AI Voice Agent backend for clinic appointment management",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "morgan": "^1.10.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
