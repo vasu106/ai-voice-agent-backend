@@ -9,20 +9,10 @@ const routes = require('./routes/index');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
-// TEMPORARY DEBUG — remove after fixing
-app.post('*', (req, res, next) => {
-  console.log('=== INCOMING REQUEST ===');
-  console.log('URL:', req.url);
-  console.log('BODY:', JSON.stringify(req.body, null, 2));
-  next();
-});
-
-// ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.json({
     success: true,
@@ -39,10 +29,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api', routes);
 
-// ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -50,7 +38,6 @@ app.use((req, res) => {
   });
 });
 
-// ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('[GlobalError]', err);
   res.status(500).json({
@@ -59,7 +46,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ─── Start Server ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);

@@ -1,9 +1,11 @@
 const { logCallSummary } = require('../services/conversationService');
 const { successResponse, errorResponse } = require('../utils/responseHelper');
+const { parseVapiBody } = require('../utils/vapiParser');
 
 async function handleLogCallSummary(req, res) {
   try {
-    const { call_id, phone, summary, organization_id, duration_seconds } = req.body;
+    const data = parseVapiBody(req.body);
+    const { call_id, phone, summary, organization_id, duration_seconds } = data;
 
     if (!summary) return errorResponse(res, 'Field "summary" is required.');
 
@@ -17,9 +19,9 @@ async function handleLogCallSummary(req, res) {
 
 async function handleHandoffToHuman(req, res) {
   try {
-    const { phone, reason, call_id } = req.body;
+    const data = parseVapiBody(req.body);
+    const { phone, reason, call_id } = data;
 
-    // Log the handoff request — no external action needed for now
     console.log(`[handoff-to-human] Call ID: ${call_id || 'N/A'} | Phone: ${phone || 'N/A'} | Reason: ${reason || 'Not specified'}`);
 
     return res.status(200).json({
