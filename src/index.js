@@ -6,6 +6,9 @@ const morgan = require('morgan');
 
 const routes = require('./routes/index');
 
+// At the top with other requires:
+const configRoutes = require('./routes/config');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -30,6 +33,9 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api', routes);
+
+// After app.use('/api', routes); line:
+app.use('/api', configRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

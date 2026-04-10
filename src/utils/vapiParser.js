@@ -1,6 +1,7 @@
 /**
  * Vapi sends tool arguments nested inside message.toolCalls[0].function.arguments
  * This utility extracts and parses them into a flat object.
+ * Also extracts phone number from Vapi's call object automatically.
  * Falls back to req.body directly if called from Postman/direct API.
  */
 function parseVapiBody(body) {
@@ -10,13 +11,28 @@ function parseVapiBody(body) {
       const toolCall = body.message.toolCalls[0];
       const args = toolCall?.function?.arguments;
 
+      let parsed = {};
+
       if (typeof args === 'string') {
-        return JSON.parse(args);
+        parsed = JSON.parse(args);
+      } else if (typeof args === 'object') {
+        parsed = { ...args };
       }
 
-      if (typeof args === 'object') {
-        return args;
+      // Auto-inject phone from Vapi call object if not already in args
+      // Vapi provides caller phone in: body.call.customer.number
+      if (!parsed.phone) {
+        const vapiPhone =
+          body?.call?.customer?.number ||
+          body?.message?.call?.customer?.number ||
+          null;
+
+        if (vapiPhone) {
+          parsed.phone = vapiPhone;
+        }
       }
+
+      return parsed;
     }
 
     // Direct API call (Postman / testing) — return body as-is
