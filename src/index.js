@@ -14,6 +14,14 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
+// TEMPORARY DEBUG — remove after fixing
+app.post('*', (req, res, next) => {
+  console.log('=== INCOMING REQUEST ===');
+  console.log('URL:', req.url);
+  console.log('BODY:', JSON.stringify(req.body, null, 2));
+  next();
+});
+
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.json({
