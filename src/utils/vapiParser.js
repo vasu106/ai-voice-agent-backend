@@ -25,8 +25,8 @@ function parseVapiBody(body) {
         const vapiPhone =
           body?.call?.customer?.number ||
           body?.message?.call?.customer?.number ||
+          body?.call?.phoneNumber?.number ||
           null;
-
         if (vapiPhone) {
           parsed.phone = vapiPhone;
         }

@@ -2,9 +2,7 @@ const supabase = require('../config/supabase');
 const { normalizeDate, getDayName, isWithinWorkingHours } = require('../utils/slotHelper');
 
 // 🔥 Booking Code Generator
-function generateBookingCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+const booking_code = Math.floor(100000 + Math.random() * 900000).toString();
 
 // Find or create patient
 async function findOrCreatePatient(name, phone, organizationId) {
@@ -136,7 +134,7 @@ async function bookAppointment({ patient_name, phone, doctor, date, time }) {
 
   const bookingCode = generateBookingCode();
 
-  const { data: appointment, error } = await supabase
+  const { data: appointment, error: appointmentError } = await supabase
     .from('appointments')
     .insert({
       patient_id: patient.id,
@@ -144,10 +142,8 @@ async function bookAppointment({ patient_name, phone, doctor, date, time }) {
       organization_id: doctorData.organization_id,
       appointment_date: normalizedDate,
       appointment_time: normalizedTime,
-      patient_name: patient.name,
-      patient_phone: patient.phone,
-      booking_code: bookingCode,
-      status: 'confirmed',
+      status: 'scheduled',
+      booking_code: booking_code,   // ← ADD THIS LINE
     })
     .select()
     .single();
@@ -156,12 +152,13 @@ async function bookAppointment({ patient_name, phone, doctor, date, time }) {
 
   return {
     appointment_id: appointment.id,
-    booking_code: bookingCode,
     patient_name: patient.name,
     phone: patient.phone,
     doctor: doctorData.name,
     date: normalizedDate,
     time: normalizedTime,
+    status: appointment.status,
+    booking_code: appointment.booking_code,  // ← ADD THIS LINE
   };
 }
 
