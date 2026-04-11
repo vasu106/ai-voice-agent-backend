@@ -1,10 +1,12 @@
 const supabase = require('../config/supabase');
 const { normalizeDate, getDayName, isWithinWorkingHours } = require('../utils/slotHelper');
 
-// 🔥 Booking Code Generator
-const booking_code = Math.floor(100000 + Math.random() * 900000).toString();
+// ─── Booking Code Generator ───────────────────────────────────────────────────
+function generateBookingCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
-// Find or create patient
+// ─── Find or Create Patient ───────────────────────────────────────────────────
 async function findOrCreatePatient(name, phone, organizationId) {
   const { data: existingPatient } = await supabase
     .from('patients')
@@ -27,13 +29,14 @@ async function findOrCreatePatient(name, phone, organizationId) {
     .single();
 
   if (error || !newPatient) {
+    console.error('[findOrCreatePatient] Error:', error);
     throw new Error('Failed to create patient.');
   }
 
   return newPatient;
 }
 
-// Validate doctor
+// ─── Validate Doctor ──────────────────────────────────────────────────────────
 async function validateDoctor(doctor) {
   const { data, error } = await supabase
     .from('doctors')
@@ -43,13 +46,14 @@ async function validateDoctor(doctor) {
     .single();
 
   if (error || !data) {
+    console.error('[validateDoctor] Error:', error);
     throw new Error(`Doctor "${doctor}" not found.`);
   }
 
   return data;
 }
 
-// Validate clinic hours
+// ─── Validate Clinic Hours ────────────────────────────────────────────────────
 async function validateClinicHours(orgId, date, time) {
   const dayName = getDayName(date);
 
@@ -70,7 +74,6 @@ async function validateClinicHours(orgId, date, time) {
   }
 
   let valid = false;
-
   for (const slot of openSlots) {
     if (isWithinWorkingHours(time, slot.open_time, slot.close_time)) {
       valid = true;
@@ -79,11 +82,11 @@ async function validateClinicHours(orgId, date, time) {
   }
 
   if (!valid) {
-    throw new Error('Selected time is outside working hours.');
+    throw new Error(`Time ${time} is outside working hours.`);
   }
 }
 
-// Check slot
+// ─── Check Slot Availability ──────────────────────────────────────────────────
 async function isSlotBooked(doctorId, date, time) {
   const { data, error } = await supabase
     .from('appointments')
@@ -93,47 +96,41 @@ async function isSlotBooked(doctorId, date, time) {
     .eq('appointment_time', time)
     .in('status', ['scheduled', 'confirmed']);
 
-  if (error) throw new Error('Slot check failed');
+  if (error) throw new Error('Slot check failed.');
 
   return data.length > 0;
 }
 
-// 🔥 BOOK APPOINTMENT (FINAL)
+// ─── Book Appointment ─────────────────────────────────────────────────────────
 async function bookAppointment({ patient_name, phone, doctor, date, time }) {
+  // 1. Normalize date
   const normalizedDate = normalizeDate(date);
-  if (!normalizedDate) throw new Error('Invalid date');
+  if (!normalizedDate) throw new Error('Invalid date format.');
 
+  // 2. Check not past
   const today = new Date().toISOString().split('T')[0];
-  if (normalizedDate < today) throw new Error('Past date not allowed');
+  if (normalizedDate < today) throw new Error('Cannot book for a past date.');
 
+  // 3. Normalize time
   const normalizedTime = time.substring(0, 5);
 
+  // 4. Validate doctor
   const doctorData = await validateDoctor(doctor);
 
-  await validateClinicHours(
-    doctorData.organization_id,
-    normalizedDate,
-    normalizedTime
-  );
+  // 5. Validate clinic hours
+  await validateClinicHours(doctorData.organization_id, normalizedDate, normalizedTime);
 
-  const isBooked = await isSlotBooked(
-    doctorData.id,
-    normalizedDate,
-    normalizedTime
-  );
+  // 6. Check double booking
+  const isBooked = await isSlotBooked(doctorData.id, normalizedDate, normalizedTime);
+  if (isBooked) throw new Error('This slot is already booked.');
 
-  if (isBooked) {
-    throw new Error('Slot already booked');
-  }
+  // 7. Find or create patient
+  const patient = await findOrCreatePatient(patient_name, phone, doctorData.organization_id);
 
-  const patient = await findOrCreatePatient(
-    patient_name,
-    phone,
-    doctorData.organization_id
-  );
-
+  // 8. Generate booking code
   const bookingCode = generateBookingCode();
 
+  // 9. Insert appointment
   const { data: appointment, error: appointmentError } = await supabase
     .from('appointments')
     .insert({
@@ -143,12 +140,15 @@ async function bookAppointment({ patient_name, phone, doctor, date, time }) {
       appointment_date: normalizedDate,
       appointment_time: normalizedTime,
       status: 'scheduled',
-      booking_code: booking_code,   // ← ADD THIS LINE
+      booking_code: bookingCode,
     })
     .select()
     .single();
 
-  if (error) throw new Error('Booking failed');
+  if (appointmentError || !appointment) {
+    console.error('[bookAppointment] Insert error:', appointmentError);
+    throw new Error('Failed to book appointment.');
+  }
 
   return {
     appointment_id: appointment.id,
@@ -158,55 +158,94 @@ async function bookAppointment({ patient_name, phone, doctor, date, time }) {
     date: normalizedDate,
     time: normalizedTime,
     status: appointment.status,
-    booking_code: appointment.booking_code,  // ← ADD THIS LINE
+    booking_code: appointment.booking_code,
   };
 }
 
-// CANCEL
+// ─── Cancel Appointment ───────────────────────────────────────────────────────
 async function cancelAppointment({ phone, booking_code }) {
-  // 1. Find appointment using phone + booking_code
-  const { data: appointment, error } = await supabase
+  // 1. Find patient by phone
+  const { data: patient, error: patientError } = await supabase
+    .from('patients')
+    .select('id, name')
+    .eq('phone', phone)
+    .limit(1)
+    .single();
+
+  if (patientError || !patient) {
+    throw new Error('No patient found with this phone number.');
+  }
+
+  // 2. Find appointment by patient_id + booking_code
+  const { data: appointment, error: apptError } = await supabase
     .from('appointments')
-    .select('*')
-    .eq('patient_phone', phone)
+    .select('id, appointment_date, appointment_time, booking_code')
+    .eq('patient_id', patient.id)
     .eq('booking_code', booking_code)
     .in('status', ['scheduled', 'confirmed'])
     .limit(1)
     .single();
 
-  if (error || !appointment) {
-    throw new Error('Invalid booking code or no active appointment found.');
+  if (apptError || !appointment) {
+    throw new Error('No active appointment found with this booking code.');
   }
 
-  // 2. Cancel appointment
+  // 3. Update status to cancelled
   const { error: updateError } = await supabase
     .from('appointments')
     .update({ status: 'cancelled' })
     .eq('id', appointment.id);
 
-  if (updateError) {
-    throw new Error('Failed to cancel appointment.');
-  }
+  if (updateError) throw new Error('Failed to cancel appointment.');
 
   return {
     booking_code: appointment.booking_code,
-    patient_name: appointment.patient_name,
+    patient_name: patient.name,
     date: appointment.appointment_date,
     time: appointment.appointment_time,
     status: 'cancelled',
+    message: 'Appointment cancelled successfully.',
   };
 }
-// RESCHEDULE
-async function rescheduleAppointment(data) {
-  await cancelAppointment(data.phone, data.old_date);
 
-  return await bookAppointment({
-    patient_name: data.patient_name || 'Patient',
-    phone: data.phone,
-    doctor: data.doctor,
-    date: data.new_date,
-    time: data.new_time,
+// ─── Reschedule Appointment ───────────────────────────────────────────────────
+async function rescheduleAppointment({ phone, booking_code, doctor, new_date, new_time }) {
+  // 1. Cancel old appointment
+  const cancelled = await cancelAppointment({ phone, booking_code });
+
+  // 2. Get patient name
+  const { data: patient } = await supabase
+    .from('patients')
+    .select('name')
+    .eq('phone', phone)
+    .limit(1)
+    .single();
+
+  const patientName = patient ? patient.name : 'Patient';
+
+  // 3. Book new appointment
+  const booked = await bookAppointment({
+    patient_name: patientName,
+    phone,
+    doctor,
+    date: new_date,
+    time: new_time,
   });
+
+  return {
+    cancelled: {
+      date: cancelled.date,
+      time: cancelled.time,
+    },
+    booked: {
+      appointment_id: booked.appointment_id,
+      doctor: booked.doctor,
+      date: booked.date,
+      time: booked.time,
+      booking_code: booked.booking_code,
+    },
+    message: 'Appointment rescheduled successfully.',
+  };
 }
 
 module.exports = {
