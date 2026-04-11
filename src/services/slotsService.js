@@ -23,16 +23,20 @@ async function getAvailableSlots(date, doctor) {
 
     // 3. Find doctor
     const { data: doctorData, error: doctorError } = await supabase
-      .from('doctors')
-      .select('id, name, organization_id')
-      .ilike('name', `%${doctor}%`)
-      .limit(1)
-      .single();
+        .from('doctors')
+        .select('id, name, organization_id')
+        .ilike('name', `%${doctor}%`)
+        .limit(1)
+        .single();
 
-    if (doctorError || !doctorData) {
-      console.error('[Doctor Error]', doctorError);
-      throw new Error(`Doctor "${doctor}" not found.`);
-    }
+      if (doctorError) {
+        console.error('[Doctor Error]', doctorError);
+        throw new Error(`Doctor "${doctor}" not found.`);
+      }
+
+      if (!doctorData) {
+        throw new Error(`Doctor "${doctor}" not found in database. Please add doctor to Supabase.`);
+      }
 
     const doctorId = doctorData.id;
     const organizationId = doctorData.organization_id;
